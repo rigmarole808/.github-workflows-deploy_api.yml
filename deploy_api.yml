@@ -1,0 +1,36 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Deploy to DigitalOcean
+      run: |
+        sshpass -p "${{ secrets.PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} '
+          mkdir -p hackgpt
+          cd hackgpt
+          if [ ! -d .git ]; then
+            git init
+            git remote add origin https://github.com/${{ github.repository }}.git
+            git config core.sparseCheckout true
+            echo "Dockerfile" >> .git/info/sparse-checkout
+            echo "api/" >> .git/info/sparse-checkout
+            echo "requirements.txt" >> .git/info/sparse-checkout
+            git pull --depth=1 origin main
+          else
+            git pull origin main
+          fi
+          docker build -t hackgpt .
+          docker stop hackgpt-container || true
+          docker rm hackgpt-container || true
+          docker run -d --name hackgpt-container -p 8000:8000 hackgpt
+        '
